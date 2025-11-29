@@ -4,7 +4,7 @@ torchvision==0.17.1
 
 # Data processing
 pandas>=2.0.0
-numpy>=1.24.0
+numpy<2
 Pillow>=9.5.0
 matplotlib>=3.7.0
 
