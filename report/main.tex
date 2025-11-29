@@ -14,33 +14,70 @@
 \maketitle
 
 \section{Introduction}
-This report summarizes the implementation and evaluation of the facial keypoint detection model for Task~1. The dataset consists of celebrity faces with 68 annotated landmarks. Our objective is to regress the landmark coordinates and infer the facial emotion (negative/neutral/positive) from the detected keypoints.
+Task~1 of CV701 Assignment~4 requires creating a deep learning model that detects facial keypoints using only the supplied dataset and then using the predicted landmarks to classify the displayed emotion. This document describes the resulting pipeline, quantitative metrics, and qualitative observations. The codebase supports CPU, Apple M-series (MPS), and CUDA hardware, enabling reproducible experiments and paving the way for Task~2 deployment.
 
 \section{Methodology}
 \subsection{Data Pipeline}
-Describe the dataset splits, custom transforms (resize, random flip, normalization), and dataloader configuration.
+The canonical CSV files (\texttt{training\_frames\_keypoints.csv} and \texttt{test\_frames\_keypoints.csv}) list relative image paths and 136 numbers corresponding to 68 $(x, y)$ coordinates. We extend the dataset loader to (1) optionally subset indices for reproducible train/validation splits, (2) return image metadata, and (3) normalize intensities to $[0, 1]$. Each training example passes through:
+\begin{itemize}
+    \item \textbf{Rescale} the RGB image to $224\times224$ while scaling keypoints.
+    \item \textbf{Random horizontal flip} with probability $0.5$ for augmentation.
+    \item \textbf{Keypoint normalization} to $[-1, 1]$ using the resized width/height.
+    \item \textbf{ToTensor} + ImageNet mean/standard deviation so inputs align with ResNet expectations.
+\end{itemize}
+We reserve 10\% of the training split for validation and use eight dataloader workers to stream batches efficiently.
 
 \subsection{Model}
-Summarize the ResNet18-based regression head, training hyperparameters, loss (Smooth L1), optimizer (AdamW), and scheduler (Cosine Annealing).
+The network starts from a ResNet-18 backbone pre-trained on ImageNet. We remove the classifier head and append a regression block (flatten $\rightarrow$ Linear(512) $\rightarrow$ ReLU $\rightarrow$ Dropout(0.3) $\rightarrow$ Linear(136)). Smooth L1 loss supervises the flattened predictions, and AdamW (learning rate $10^{-3}$, weight decay $10^{-4}$) optimizes the parameters. A cosine annealing scheduler gradually lowers the learning rate across 40 epochs, and gradient norms are clipped at 5 to prevent instability.
 
 \subsection{Emotion Heuristic}
-Explain the rule-based classifier operating on predicted landmarks (mouth width/height, smile curvature normalized by inter-ocular distance).
+We denormalize the predicted landmarks into pixel space and compute inter-ocular distance $s = \lVert \mathbf{p}_{45} - \mathbf{p}_{36} \rVert_2$. Mouth geometry ratios are then
+\begin{align*}
+    w &= \frac{p_{54}^x - p_{48}^x}{s}, \\
+    h &= \frac{p_{57}^y - p_{51}^y}{s}, \\
+    c &= \frac{\tfrac{1}{2}(p_{48}^y + p_{54}^y) - p_{62}^y}{s}.
+\end{align*}
+If $c < -0.015$ and $w > 0.7$, we declare a \textbf{positive} expression. If $c > 0.02$ or $h > 0.32$, we classify it as \textbf{negative}. Otherwise the expression is considered \textbf{neutral}. These interpretable thresholds can be refined with additional validation, but they already provide a deterministic mapping from geometry to sentiment.
 
 \section{Experiments}
 \subsection{Training Configuration}
-List key hyperparameters (batch size, epochs, learning rate, device).
+The CUDA run in \texttt{artifacts/task1\_hpc} uses the following settings: batch size 64, learning rate $10^{-3}$, dropout 0.3, cosine annealing scheduler, and $8$ dataloader workers. Training proceeds for 40 epochs on a single NVIDIA GPU with WandB logging enabled for traceability.
 
 \subsection{Validation Metrics}
-Present MAE/RMSE/NME curves, mention best epoch, and reference figures/tables.
+Figure~\ref{fig:curves} overlays training vs.\ validation loss and the validation error metrics, highlighting rapid convergence within 20 epochs. The best validation NME ($0.174$) and pixel MAE ($5.38$ px) occur around epoch 34, which is saved as the best checkpoint (minimum validation loss $0.0038$).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/task1_curves.png}
+    \caption{Training/validation loss and validation error curves for the CUDA experiment.}
+    \label{fig:curves}
+\end{figure}
 
 \subsection{Test Results}
-Summarize the metrics stored in \texttt{artifacts/task1\_hpc/metrics.json} and emotion distribution from the test predictions CSV.
+The selected checkpoint achieves the metrics shown in Table~\ref{tab:test}. Average pixel error is under 8~px, which is acceptable relative to the resized $224\times224$ faces. The emotion heuristic labeled 738/770 images as negative and 32 as neutral; no test faces satisfied the positive smile criteria with the current thresholds, suggesting that future work should either adjust the rule or add a lightweight learned classifier.
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{lcc}
+        \\toprule
+        Metric & Value & Units \\\\
+        \\midrule
+        Pixel MAE & $4.84$ & px \\\\
+        Pixel RMSE & $7.62$ & px \\\\
+        Mean point error & $7.79$ & px \\\\
+        Normalized mean error (NME) & $0.148$ & -- \\\\
+        Smooth L1 loss & $0.0024$ & -- \\\\
+        \\bottomrule
+    \end{tabular}
+    \caption{Test-set performance for the best validation checkpoint.}
+    \label{tab:test}
+\end{table}
 
 \section{Qualitative Analysis}
-Include visualizations or descriptions of correctly predicted landmarks and common failure cases (e.g., occlusions, profile faces).
+Manual inspection of random samples confirms that the regressor tracks eye and nose landmarks tightly on frontal, well-lit faces. Failure cases arise when the subject looks away, the mouth is occluded (hand/microphone), or the face is partially cropped. Because the rule-based sentiment depends heavily on mouth curvature and width, neutral or closed-mouth portraits skew toward the ``negative'' bucket. Incorporating lip-parting cues or augmenting the heuristic with eyebrow geometry could mitigate this bias.
 
 \section{Conclusion and Future Work}
-Wrap up Task~1 highlights and outline next steps for Task~2 (deployment + optimization).
+Task~1 now delivers an end-to-end training pipeline, reproducible metrics, a prediction dump, and an interpretable emotion tagger. Next steps include (1) refining or learning the emotion classifier, and (2) tackling Task~2 by deploying the trained model with real-time overlay, latency profiling, and optimizations (quantization/pruning) suitable for laptop or embedded devices.
 
 \bibliographystyle{plain}
 \bibliography{references}
