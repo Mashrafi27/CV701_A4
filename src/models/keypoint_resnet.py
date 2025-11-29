@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import torch
 import torch.nn as nn
 import torchvision.models as models
@@ -12,8 +14,7 @@ class KeypointResNet(nn.Module):
 
     def __init__(self, num_keypoints: int = 68, pretrained: bool = True, dropout: float = 0.3):
         super().__init__()
-        weights = models.ResNet18_Weights.IMAGENET1K_V1 if pretrained else None
-        backbone = models.resnet18(weights=weights)
+        backbone = self._build_backbone(pretrained)
         self.feature_extractor = nn.Sequential(*list(backbone.children())[:-1])
         self.regressor = nn.Sequential(
             nn.Flatten(),
@@ -31,3 +32,18 @@ class KeypointResNet(nn.Module):
     def freeze_backbone(self, freeze: bool = True) -> None:
         for param in self.feature_extractor.parameters():
             param.requires_grad = not freeze
+
+    @staticmethod
+    def _build_backbone(pretrained: bool):
+        """Construct a ResNet18 backbone compatible with old/new torchvision."""
+
+        if hasattr(models, "ResNet18_Weights"):
+            weights = models.ResNet18_Weights.IMAGENET1K_V1 if pretrained else None
+            return models.resnet18(weights=weights)
+
+        warnings.warn(
+            "Falling back to legacy torchvision API for resnet18. "
+            "Consider upgrading torchvision to >=0.13 for weights enums.",
+            stacklevel=2,
+        )
+        return models.resnet18(pretrained=pretrained)
