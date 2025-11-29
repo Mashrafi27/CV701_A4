@@ -1,0 +1,48 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{hyperref}
+
+\title{CV701 Assignment 4 -- Task 1 Report}
+\author{Mashrafi Monon}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+This report summarizes the implementation and evaluation of the facial keypoint detection model for Task~1. The dataset consists of celebrity faces with 68 annotated landmarks. Our objective is to regress the landmark coordinates and infer the facial emotion (negative/neutral/positive) from the detected keypoints.
+
+\section{Methodology}
+\subsection{Data Pipeline}
+Describe the dataset splits, custom transforms (resize, random flip, normalization), and dataloader configuration.
+
+\subsection{Model}
+Summarize the ResNet18-based regression head, training hyperparameters, loss (Smooth L1), optimizer (AdamW), and scheduler (Cosine Annealing).
+
+\subsection{Emotion Heuristic}
+Explain the rule-based classifier operating on predicted landmarks (mouth width/height, smile curvature normalized by inter-ocular distance).
+
+\section{Experiments}
+\subsection{Training Configuration}
+List key hyperparameters (batch size, epochs, learning rate, device).
+
+\subsection{Validation Metrics}
+Present MAE/RMSE/NME curves, mention best epoch, and reference figures/tables.
+
+\subsection{Test Results}
+Summarize the metrics stored in \texttt{artifacts/task1\_hpc/metrics.json} and emotion distribution from the test predictions CSV.
+
+\section{Qualitative Analysis}
+Include visualizations or descriptions of correctly predicted landmarks and common failure cases (e.g., occlusions, profile faces).
+
+\section{Conclusion and Future Work}
+Wrap up Task~1 highlights and outline next steps for Task~2 (deployment + optimization).
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
