@@ -1,0 +1,11 @@
+{"time":"2025-11-29T21:36:55.055542+04:00","level":"INFO","msg":"stream: starting","core version":"0.23.0"}
+{"time":"2025-11-29T21:36:56.119489+04:00","level":"INFO","msg":"stream: created new stream","id":"hp2tyhew"}
+{"time":"2025-11-29T21:36:56.119746+04:00","level":"INFO","msg":"handler: started","stream_id":"hp2tyhew"}
+{"time":"2025-11-29T21:36:56.121386+04:00","level":"INFO","msg":"sender: started","stream_id":"hp2tyhew"}
+{"time":"2025-11-29T21:36:56.121391+04:00","level":"INFO","msg":"writer: started","stream_id":"hp2tyhew"}
+{"time":"2025-11-29T21:36:56.121638+04:00","level":"INFO","msg":"stream: started","id":"hp2tyhew"}
+{"time":"2025-11-29T21:37:18.628244+04:00","level":"INFO","msg":"stream: closing","id":"hp2tyhew"}
+{"time":"2025-11-29T21:37:19.301905+04:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-11-29T21:37:20.008958+04:00","level":"INFO","msg":"handler: closed","stream_id":"hp2tyhew"}
+{"time":"2025-11-29T21:37:20.01025+04:00","level":"INFO","msg":"sender: closed","stream_id":"hp2tyhew"}
+{"time":"2025-11-29T21:37:20.010597+04:00","level":"INFO","msg":"stream: closed","id":"hp2tyhew"}

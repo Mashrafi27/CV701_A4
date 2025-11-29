@@ -1,0 +1,103 @@
+_wandb:
+    value:
+        cli_version: 0.23.0
+        e:
+            w210mxpqjs9vb3hp40r7snrt0w3rjp0z:
+                apple:
+                    ecpuCores: 4
+                    gpuCores: 7
+                    memoryGb: 8
+                    name: Unknown
+                    pcpuCores: 4
+                    ramTotalBytes: "8589934592"
+                    swapTotalBytes: "4294967296"
+                args:
+                    - --pretrained
+                    - --output-dir
+                    - artifacts/task1_run1
+                    - --use-wandb
+                    - --wandb-project
+                    - cv701_a4
+                    - --wandb-run-name
+                    - mps_baseline
+                cpu_count: 8
+                cpu_count_logical: 8
+                disk:
+                    /:
+                        total: "245107195904"
+                        used: "242655662080"
+                email: mmm9886@nyu.edu
+                executable: /Users/mashrafi/anaconda3/envs/cv701/bin/python3
+                git:
+                    commit: 0aeaebd05cea9afc96f79338ce0414fc6a47076e
+                    remote: git@github.com:Mashrafi27/CV701_A4.git
+                host: MashrafiMonon
+                memory:
+                    total: "8589934592"
+                os: macOS-10.16-x86_64-i386-64bit
+                program: -m src.train_task1
+                python: CPython 3.11.13
+                root: /Users/mashrafi/Downloads/Facial-Keypoint-Detection
+                startedAt: "2025-11-29T17:36:52.073525Z"
+                writerId: w210mxpqjs9vb3hp40r7snrt0w3rjp0z
+        m: []
+        python_version: 3.11.13
+        t:
+            "1":
+                - 1
+                - 41
+            "2":
+                - 1
+                - 41
+            "3":
+                - 1
+                - 13
+                - 16
+            "4": 3.11.13
+            "5": 0.23.0
+            "12": 0.23.0
+            "13": darwin-x86_64
+batch_size:
+    value: 64
+device:
+    value: mps
+dropout:
+    value: 0.3
+epochs:
+    value: 40
+freeze_backbone:
+    value: false
+image_size:
+    value: 224
+learning_rate:
+    value: 0.001
+max_grad_norm:
+    value: 5
+num_workers:
+    value: 4
+output_dir:
+    value: artifacts/task1_run1
+pretrained:
+    value: true
+seed:
+    value: 42
+test_csv:
+    value: data/test_frames_keypoints.csv
+test_root:
+    value: data/test
+train_csv:
+    value: data/training_frames_keypoints.csv
+train_root:
+    value: data/training
+use_wandb:
+    value: true
+val_split:
+    value: 0.1
+wandb_entity:
+    value: null
+wandb_project:
+    value: cv701_a4
+wandb_run_name:
+    value: mps_baseline
+weight_decay:
+    value: 0.0001
