@@ -98,6 +98,7 @@ class RandomAffine:
             return sample
 
         height, width = sample["image_size"]
+        height, width = int(height), int(width)
         angle = random.uniform(-self.degrees, self.degrees)
         max_dx = self.translate[0] * width
         max_dy = self.translate[1] * height
@@ -143,6 +144,7 @@ class RandomPerspective:
             return sample
 
         height, width = sample["image_size"]
+        height, width = int(height), int(width)
         margin = self.distortion_scale * min(height, width)
         startpoints = np.array(
             [[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]], dtype=np.float32
