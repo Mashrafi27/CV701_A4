@@ -31,14 +31,14 @@ class EmotionClassifier:
 
     def __init__(
         self,
-        positive_curve: float = 0.012,
-        positive_width: float = 0.555,
-        positive_height: float = 0.20,
+        positive_curve: float = 0.005,
+        positive_width: float = 0.585,
+        positive_height: float = 0.21,
         positive_eye: float = 0.060,
-        negative_curve: float = 0.048,
-        negative_height: float = 0.225,
-        negative_eye: float = 0.090,
-        negative_brow: float = -0.18,
+        negative_curve: float = 0.040,
+        negative_height: float = 0.26,
+        negative_eye: float = 0.085,
+        negative_brow: float = -0.23,
     ):
         self.positive_curve = positive_curve
         self.positive_width = positive_width
@@ -77,7 +77,9 @@ class EmotionClassifier:
 
         if score >= 2:
             return "positive"
-        return "negative"
+        if score <= -2:
+            return "negative"
+        return "neutral"
 
     def predict_batch(self, keypoints_batch: Iterable[Sequence[Sequence[float]]]) -> List[str]:
         return [self.predict(points) for points in keypoints_batch]
