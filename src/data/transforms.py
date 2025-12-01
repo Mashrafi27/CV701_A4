@@ -78,6 +78,61 @@ class RandomHorizontalFlip:
         return sample
 
 
+class RandomRotation:
+    """Rotate image and keypoints around the image center."""
+
+    def __init__(self, degrees: float = 0.0):
+        self.degrees = degrees
+
+    def __call__(self, sample):
+        if self.degrees <= 0:
+            return sample
+        angle = random.uniform(-self.degrees, self.degrees)
+        if abs(angle) < 1e-3:
+            return sample
+
+        image = sample["image"]
+        height, width = sample["image_size"]
+        pil_image = Image.fromarray(_to_uint8(image))
+        rotated = pil_image.rotate(angle, resample=Image.BILINEAR)
+        sample["image"] = np.asarray(rotated, dtype=np.float32) / 255.0
+
+        radians = np.deg2rad(angle)
+        rot_matrix = np.array(
+            [[np.cos(radians), -np.sin(radians)], [np.sin(radians), np.cos(radians)]],
+            dtype=np.float32,
+        )
+        center = np.array([width / 2.0, height / 2.0], dtype=np.float32)
+        keypoints = sample["keypoints"].copy()
+        keypoints = (rot_matrix @ (keypoints - center).T).T + center
+        sample["keypoints"] = keypoints
+        return sample
+
+
+class ColorJitter:
+    """Randomly perturb image brightness and contrast."""
+
+    def __init__(self, brightness: float = 0.2, contrast: float = 0.2):
+        self.brightness = max(0.0, brightness)
+        self.contrast = max(0.0, contrast)
+
+    def __call__(self, sample):
+        image = sample["image"].astype(np.float32)
+
+        if self.brightness > 0:
+            factor = random.uniform(1 - self.brightness, 1 + self.brightness)
+            image *= factor
+
+        if self.contrast > 0:
+            mean = image.mean(axis=(0, 1), keepdims=True)
+            factor = random.uniform(1 - self.contrast, 1 + self.contrast)
+            image = (image - mean) * factor + mean
+
+        image = np.clip(image, 0.0, 1.0)
+        sample["image"] = image
+        return sample
+
+
 class ToTensor:
     """Convert ndarrays in sample to PyTorch tensors."""
 

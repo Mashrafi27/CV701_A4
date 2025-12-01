@@ -23,10 +23,12 @@ except ImportError:  # pragma: no cover - optional dependency
 from data import FacialKeypointsDataset
 
 from .data.transforms import (
+    ColorJitter,
     Compose,
     NormalizeImage,
     NormalizeKeypoints,
     RandomHorizontalFlip,
+    RandomRotation,
     Rescale,
     ToTensor,
 )
@@ -86,6 +88,8 @@ def build_transforms(image_size: int):
         [
             Rescale(image_size),
             RandomHorizontalFlip(prob=0.5),
+            RandomRotation(degrees=15),
+            ColorJitter(brightness=0.2, contrast=0.2),
             NormalizeKeypoints(),
             ToTensor(),
             NormalizeImage(),
