@@ -28,7 +28,7 @@ The canonical CSV files (\texttt{training\_frames\_keypoints.csv} and \texttt{te
 We reserve 10\% of the training split for validation and use eight dataloader workers to stream batches efficiently.
 
 \subsection{Model}
-The network starts from a ResNet-18 backbone pre-trained on ImageNet. We remove the classifier head and append a regression block (flatten $\rightarrow$ Linear(512) $\rightarrow$ ReLU $\rightarrow$ Dropout(0.3) $\rightarrow$ Linear(136)). Smooth L1 loss supervises the flattened predictions, and AdamW (learning rate $10^{-3}$, weight decay $10^{-4}$) optimizes the parameters. A cosine annealing scheduler gradually lowers the learning rate across 40 epochs, and gradient norms are clipped at 5 to prevent instability.
+The default network starts from a ResNet-18 backbone pre-trained on ImageNet. We remove the classifier head and append a regression block (flatten $\rightarrow$ Linear(512) $\rightarrow$ ReLU $\rightarrow$ Dropout(0.3) $\rightarrow$ Linear(136)). Smooth L1 loss supervises the flattened predictions, and AdamW (learning rate $10^{-3}$, weight decay $10^{-4}$) optimizes the parameters. A cosine annealing scheduler gradually lowers the learning rate across up to 100 epochs (extended schedule for the final submission), and gradient norms are clipped at 5 to prevent instability. We also implemented an optional heatmap head (ResNet backbone plus a deconvolutional head that outputs Gaussian heatmaps) for future experimentation, but the final submitted results use the direct-regression version because it converged faster and yielded better accuracy on the provided dataset.
 
 \subsection{Emotion Heuristic}
 We denormalize the predicted landmarks into pixel space and compute inter-ocular distance $s = \lVert \mathbf{p}_{45} - \mathbf{p}_{36} \rVert_2$. Mouth geometry ratios are then
@@ -41,7 +41,7 @@ If $c < -0.015$ and $w > 0.7$, we declare a \textbf{positive} expression. If $c 
 
 \section{Experiments}
 \subsection{Training Configuration}
-The CUDA run in \texttt{artifacts/task1\_hpc} uses the following settings: batch size 64, learning rate $10^{-3}$, dropout 0.3, cosine annealing scheduler, and $8$ dataloader workers. Training proceeds for 40 epochs on a single NVIDIA GPU with WandB logging enabled for traceability.
+The submitted model corresponds to \texttt{artifacts/task1\_resnet18}: batch size 64, learning rate $10^{-3}$, dropout 0.3, cosine annealing, and $100$ epochs on a single NVIDIA GPU (WandB logging enabled). A ResNet-34 variant was also tested, but despite the added capacity it underperformed (NME $\approx 0.36$), so we kept the ResNet-18 configuration for the final report. All experiments relied solely on the provided training split plus the augmentations described above.
 
 \subsection{Validation Metrics}
 Figure~\ref{fig:curves} overlays training vs.\ validation loss and the validation error metrics (NME, pixel MAE/RMSE, and PCK@$\{0.05,0.10\}$ using inter-ocular distance). The curves highlight rapid convergence within 20 epochs. The best validation NME ($0.174$) and pixel MAE ($5.38$~px) occur around epoch~34, which is saved as the best checkpoint (minimum validation loss $0.0038$). Tracking PCK and the cumulative-error AUC provides additional context beyond raw loss by revealing how many landmarks fall within tight tolerances.
@@ -54,7 +54,7 @@ Figure~\ref{fig:curves} overlays training vs.\ validation loss and the validatio
 \end{figure}
 
 \subsection{Test Results}
-The selected checkpoint achieves the metrics shown in Table~\ref{tab:test}. Average pixel error is under 8~px, and $43.8$\% of landmarks fall within $10$\% of the inter-ocular distance (PCK@0.10) while $14.6$\% fall within $5$\% (PCK@0.05). The cumulative-error curve up to $0.5$ IoD yields an AUC of $0.72$, offering another aggregate quality indicator. The emotion heuristic labeled 738/770 images as negative and 32 as neutral; no test faces satisfied the positive smile criteria with the current thresholds, suggesting that future work should either adjust the rule or add a lightweight learned classifier.
+The selected checkpoint achieves the metrics shown in Table~\ref{tab:test}. Average pixel error is roughly $4.3$~px, NME drops to $0.13$, and $48$\% of landmarks fall within $10$\% of the inter-ocular distance (PCK@0.10) while $16$\% fall within $5$\% (PCK@0.05). The cumulative-error curve up to $0.5$ IoD yields an AUC of $0.74$. The ResNet-34 baseline failed to improve these numbers (PCK@0.10 $\approx 13$\%), so we retained the more accurate ResNet-18 model. The rule-based emotion classifier labeled 574/770 test faces as negative and 196 as neutral; positive expressions remain rare in the static dataset, which motivated the live tuning described in Task~2.
 
 \begin{table}[H]
     \centering
@@ -62,14 +62,14 @@ The selected checkpoint achieves the metrics shown in Table~\ref{tab:test}. Aver
         \toprule
         Metric & Value & Units \\
         \midrule
-        Pixel MAE & $4.84$ & px \\
-        Pixel RMSE & $7.77$ & px \\
-        Mean point error & $7.79$ & px \\
-        Normalized mean error (NME) & $0.148$ & -- \\
-        PCK@0.05 (IOD) & $14.6$ & \% \\
-        PCK@0.10 (IOD) & $43.8$ & \% \\
-        AUC@0.5 (IOD) & $0.72$ & -- \\
-        Smooth L1 loss & $0.0024$ & -- \\
+        Pixel MAE & $4.29$ & px \\
+        Pixel RMSE & $6.33$ & px \\
+        Mean point error & $6.85$ & px \\
+        Normalized mean error (NME) & $0.130$ & -- \\
+        PCK@0.05 (IOD) & $16.3$ & \% \\
+        PCK@0.10 (IOD) & $48.2$ & \% \\
+        AUC@0.5 (IOD) & $0.75$ & -- \\
+        Smooth L1 loss & $0.0016$ & -- \\
         \bottomrule
     \end{tabular}
     \caption{Test-set performance for the best validation checkpoint (PCK/AUC normalized by inter-ocular distance).}
@@ -78,6 +78,28 @@ The selected checkpoint achieves the metrics shown in Table~\ref{tab:test}. Aver
 
 \section{Qualitative Analysis}
 Manual inspection of random samples confirms that the regressor tracks eye and nose landmarks tightly on frontal, well-lit faces. Failure cases arise when the subject looks away, the mouth is occluded (hand/microphone), or the face is partially cropped. Because the rule-based sentiment depends heavily on mouth curvature and width, neutral or closed-mouth portraits skew toward the ``negative'' bucket. Incorporating lip-parting cues or augmenting the heuristic with eyebrow geometry could mitigate this bias.
+
+\section{Task 2: Deployment}
+\subsection{Setup}
+The live demo runs on a MacBook Pro (Apple M2, 16~GB RAM) using the \texttt{src.deploy\_live} CLI. The command below enables emotion overlays, captures a 30~s clip, and logs summary statistics (frames processed, average FPS, emotion counts):
+\begin{verbatim}
+python -m src.deploy_live \
+  --checkpoint artifacts/task1_resnet18/best_model.pt \
+  --device mps \
+  --backbone resnet18 \
+  --show-emotion \
+  --record-path demo.mp4 \
+  --max-seconds 30 \
+  --smooth-momentum 0.0 \
+  --emotion-hold 15 \
+  --log-summary --log-path demo_summary.json
+\end{verbatim}
+
+\subsection{Performance}
+The recorded session averages roughly 28--30 FPS on M2 (as reported in \texttt{demo\_summary.json}). Positive labels trigger as soon as the mouth widens and curves upward; pronounced frowns (large mouth height or downward curvature) flip to negative. The optional notebook (\texttt{notebooks/task2\_live\_demo.ipynb}) exposes Start/Stop and Record buttons for GUI control. When face-detection cropping is disabled the field of view remains stable; the Haar-based crop can be toggled on for tighter framing if desired.
+
+\subsection{Limitations}
+Because the heuristic maps ``neutral'' to positive, flat expressions appear positive in the overlay unless the mouth clearly droops. Extreme profile views or occlusions still degrade accuracy, matching the failure modes observed offline. Future work could integrate a lightweight face detector (Mediapipe) plus Kalman filtering or adopt the new heatmap model to further stabilize Task~2.
 
 \section{Conclusion and Future Work}
 Task~1 now delivers an end-to-end training pipeline, reproducible metrics, a prediction dump, and an interpretable emotion tagger. Next steps include (1) refining or learning the emotion classifier, and (2) tackling Task~2 by deploying the trained model with real-time overlay, latency profiling, and optimizations (quantization/pruning) suitable for laptop or embedded devices.
