@@ -77,7 +77,7 @@ class EmotionClassifier:
 
         if score >= 2:
             return "positive"
-        if score <= -2:
+        if score <= -1:
             return "negative"
         return "neutral"
 
