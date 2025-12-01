@@ -43,7 +43,8 @@ def resolve_device(name: str) -> torch.device:
 def preprocess_frame(frame: np.ndarray, image_size: int) -> tuple[torch.Tensor, np.ndarray]:
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     resized = cv2.resize(rgb, (image_size, image_size), interpolation=cv2.INTER_LINEAR)
-    tensor = torch.from_numpy(resized).float().permute(2, 0, 1) / 255.0
+    resized = np.ascontiguousarray(resized)
+    tensor = torch.as_tensor(resized, dtype=torch.float32).permute(2, 0, 1) / 255.0
     tensor = (tensor - IMAGENET_MEAN) / IMAGENET_STD
     return tensor, resized
 
