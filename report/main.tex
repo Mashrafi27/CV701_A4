@@ -44,7 +44,7 @@ If $c < -0.015$ and $w > 0.7$, we declare a \textbf{positive} expression. If $c 
 The CUDA run in \texttt{artifacts/task1\_hpc} uses the following settings: batch size 64, learning rate $10^{-3}$, dropout 0.3, cosine annealing scheduler, and $8$ dataloader workers. Training proceeds for 40 epochs on a single NVIDIA GPU with WandB logging enabled for traceability.
 
 \subsection{Validation Metrics}
-Figure~\ref{fig:curves} overlays training vs.\ validation loss and the validation error metrics, highlighting rapid convergence within 20 epochs. The best validation NME ($0.174$) and pixel MAE ($5.38$ px) occur around epoch 34, which is saved as the best checkpoint (minimum validation loss $0.0038$).
+Figure~\ref{fig:curves} overlays training vs.\ validation loss and the validation error metrics (NME, pixel MAE/RMSE, and PCK@$\{0.05,0.10\}$ using inter-ocular distance). The curves highlight rapid convergence within 20 epochs. The best validation NME ($0.174$) and pixel MAE ($5.38$~px) occur around epoch~34, which is saved as the best checkpoint (minimum validation loss $0.0038$). Tracking PCK and the cumulative-error AUC provides additional context beyond raw loss by revealing how many landmarks fall within tight tolerances.
 
 \begin{figure}[H]
     \centering
@@ -54,22 +54,25 @@ Figure~\ref{fig:curves} overlays training vs.\ validation loss and the validatio
 \end{figure}
 
 \subsection{Test Results}
-The selected checkpoint achieves the metrics shown in Table~\ref{tab:test}. Average pixel error is under 8~px, which is acceptable relative to the resized $224\times224$ faces. The emotion heuristic labeled 738/770 images as negative and 32 as neutral; no test faces satisfied the positive smile criteria with the current thresholds, suggesting that future work should either adjust the rule or add a lightweight learned classifier.
+The selected checkpoint achieves the metrics shown in Table~\ref{tab:test}. Average pixel error is under 8~px, and $43.8$\% of landmarks fall within $10$\% of the inter-ocular distance (PCK@0.10) while $14.6$\% fall within $5$\% (PCK@0.05). The cumulative-error curve up to $0.5$ IoD yields an AUC of $0.72$, offering another aggregate quality indicator. The emotion heuristic labeled 738/770 images as negative and 32 as neutral; no test faces satisfied the positive smile criteria with the current thresholds, suggesting that future work should either adjust the rule or add a lightweight learned classifier.
 
 \begin{table}[H]
     \centering
     \begin{tabular}{lcc}
-        \\toprule
-        Metric & Value & Units \\\\
-        \\midrule
-        Pixel MAE & $4.84$ & px \\\\
-        Pixel RMSE & $7.62$ & px \\\\
-        Mean point error & $7.79$ & px \\\\
-        Normalized mean error (NME) & $0.148$ & -- \\\\
-        Smooth L1 loss & $0.0024$ & -- \\\\
-        \\bottomrule
+        \toprule
+        Metric & Value & Units \\
+        \midrule
+        Pixel MAE & $4.84$ & px \\
+        Pixel RMSE & $7.77$ & px \\
+        Mean point error & $7.79$ & px \\
+        Normalized mean error (NME) & $0.148$ & -- \\
+        PCK@0.05 (IOD) & $14.6$ & \% \\
+        PCK@0.10 (IOD) & $43.8$ & \% \\
+        AUC@0.5 (IOD) & $0.72$ & -- \\
+        Smooth L1 loss & $0.0024$ & -- \\
+        \bottomrule
     \end{tabular}
-    \caption{Test-set performance for the best validation checkpoint.}
+    \caption{Test-set performance for the best validation checkpoint (PCK/AUC normalized by inter-ocular distance).}
     \label{tab:test}
 \end{table}
 

@@ -299,15 +299,15 @@ def main():
         )
 
         if wandb_run:
-            wandb.log(
-                {
-                    "epoch": epoch,
-                    "train/loss": train_loss,
-                    "val/loss": val_metrics["loss"],
-                    "val/nme": val_metrics.get("nme", 0.0),
-                    "val/pixel_mae": val_metrics.get("pixel_mae", 0.0),
-                }
-            )
+            log_payload = {
+                "epoch": epoch,
+                "train/loss": train_loss,
+                "val/loss": val_metrics["loss"],
+            }
+            for metric_key in ("nme", "pixel_mae", "pixel_rmse", "pck_0.05", "pck_0.10", "auc_0.5"):
+                if metric_key in val_metrics:
+                    log_payload[f"val/{metric_key}"] = val_metrics[metric_key]
+            wandb.log(log_payload)
 
         if val_metrics["loss"] < best_val:
             best_val = val_metrics["loss"]
