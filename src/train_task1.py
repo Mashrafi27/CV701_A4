@@ -33,7 +33,9 @@ from .data.transforms import (
     ToTensor,
 )
 from .models.keypoint_resnet import KeypointResNet
+from .models.keypoint_heatmap import KeypointHeatmapNet
 from .utils.emotion import EmotionClassifier
+from .utils.heatmaps import generate_gaussian_heatmaps, heatmaps_to_keypoints
 from .utils.keypoints import compute_metrics, denormalize_keypoints, flatten_keypoints
 
 
@@ -53,6 +55,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--dropout", type=float, default=0.3)
     parser.add_argument("--backbone", choices=["resnet18", "resnet34"], default="resnet18")
+    parser.add_argument("--head", choices=["regression", "heatmap"], default="regression")
+    parser.add_argument("--heatmap-size", type=int, default=56)
+    parser.add_argument("--heatmap-sigma", type=float, default=1.5)
     parser.add_argument("--device", default="mps", help="mps | cuda | cpu")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-grad-norm", type=float, default=5.0)
@@ -155,27 +160,49 @@ def create_dataloaders(args):
 
 
 def create_model(args, device):
-    model = KeypointResNet(
-        pretrained=args.pretrained,
-        dropout=args.dropout,
-        backbone_name=args.backbone,
-    )
-    if args.freeze_backbone:
-        model.freeze_backbone(True)
+    if args.head == "heatmap":
+        model = KeypointHeatmapNet(
+            num_keypoints=68,
+            backbone=args.backbone,
+            pretrained=args.pretrained,
+            heatmap_size=args.heatmap_size,
+        )
+    else:
+        model = KeypointResNet(
+            pretrained=args.pretrained,
+            dropout=args.dropout,
+            backbone_name=args.backbone,
+        )
+        if args.freeze_backbone:
+            model.freeze_backbone(True)
     return model.to(device)
 
 
-def train_one_epoch(model, dataloader, criterion, optimizer, device, max_grad_norm):
+def train_one_epoch(model, dataloader, criterion, optimizer, device, max_grad_norm, args):
     model.train()
     running_loss = 0.0
     total = 0
     for batch in dataloader:
         images = batch["image"].to(device)
-        targets = flatten_keypoints(batch["keypoints"].to(device))
-
         optimizer.zero_grad(set_to_none=True)
-        preds = model(images)
-        loss = criterion(preds, targets)
+
+        if args.head == "heatmap":
+            norm_factors = batch["keypoint_normalization"].to(device)
+            targets = batch["keypoints"].to(device)
+            target_heatmaps = generate_gaussian_heatmaps(
+                targets,
+                norm_factors,
+                args.heatmap_size,
+                args.image_size,
+                sigma=args.heatmap_sigma,
+            )
+            preds = model(images)
+            loss = criterion(preds, target_heatmaps)
+        else:
+            targets = flatten_keypoints(batch["keypoints"].to(device))
+            preds = model(images)
+            loss = criterion(preds, targets)
+
         loss.backward()
         if max_grad_norm:
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
@@ -188,7 +215,7 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, max_grad_no
     return running_loss / max(total, 1)
 
 
-def evaluate(model, dataloader, criterion, device):
+def evaluate(model, dataloader, criterion, device, args):
     model.eval()
     total_loss = 0.0
     total_samples = 0
@@ -198,15 +225,32 @@ def evaluate(model, dataloader, criterion, device):
         for batch in dataloader:
             images = batch["image"].to(device)
             targets = batch["keypoints"].to(device)
-            preds = model(images)
-            loss = criterion(preds, flatten_keypoints(targets))
+            norm_factors = batch["keypoint_normalization"].to(device)
+
+            if args.head == "heatmap":
+                target_heatmaps = generate_gaussian_heatmaps(
+                    targets,
+                    norm_factors,
+                    args.heatmap_size,
+                    args.image_size,
+                    sigma=args.heatmap_sigma,
+                )
+                preds = model(images)
+                loss = criterion(preds, target_heatmaps)
+                preds_coords = heatmaps_to_keypoints(preds, norm_factors, args.image_size)
+            else:
+                preds = model(images)
+                loss = criterion(preds, flatten_keypoints(targets))
+                preds_coords = preds.view(images.size(0), -1, 2)
+
+            preds_metrics = preds_coords
 
             batch_size = images.size(0)
             total_loss += loss.item() * batch_size
             total_samples += batch_size
 
             batch_metrics = compute_metrics(
-                preds.view(batch_size, -1, 2),
+                preds_metrics,
                 targets,
                 batch["keypoint_normalization"].to(device),
             )
@@ -229,7 +273,7 @@ def save_checkpoint(model, optimizer, epoch, path):
     )
 
 
-def run_inference(model, dataloader, device, output_dir: Path):
+def run_inference(model, dataloader, device, output_dir: Path, args):
     model.eval()
     emotion_classifier = EmotionClassifier()
     records = []
@@ -238,10 +282,15 @@ def run_inference(model, dataloader, device, output_dir: Path):
         for batch in dataloader:
             images = batch["image"].to(device)
             names = batch["image_name"]
-            preds = model(images).view(images.size(0), -1, 2)
-            preds_px = denormalize_keypoints(
-                preds, batch["keypoint_normalization"].to(device)
-            ).cpu()
+            norm_factors = batch["keypoint_normalization"].to(device)
+
+            if args.head == "heatmap":
+                heatmaps = model(images)
+                preds = heatmaps_to_keypoints(heatmaps, norm_factors, args.image_size)
+            else:
+                preds = model(images).view(images.size(0), -1, 2)
+
+            preds_px = denormalize_keypoints(preds, norm_factors).cpu()
 
             for i, name in enumerate(names):
                 kp = preds_px[i]
@@ -282,7 +331,7 @@ def main():
         )
         wandb.watch(model, log="all", log_freq=100)
 
-    criterion = nn.SmoothL1Loss()
+    criterion = nn.MSELoss() if args.head == "heatmap" else nn.SmoothL1Loss()
     optimizer = torch.optim.AdamW(
         filter(lambda p: p.requires_grad, model.parameters()),
         lr=args.learning_rate,
@@ -295,8 +344,10 @@ def main():
     best_path = output_dir / "best_model.pt"
 
     for epoch in range(1, args.epochs + 1):
-        train_loss = train_one_epoch(model, train_loader, criterion, optimizer, device, args.max_grad_norm)
-        val_metrics = evaluate(model, val_loader, criterion, device)
+        train_loss = train_one_epoch(
+            model, train_loader, criterion, optimizer, device, args.max_grad_norm, args
+        )
+        val_metrics = evaluate(model, val_loader, criterion, device, args)
         scheduler.step()
 
         history["train"].append({"epoch": epoch, "loss": train_loss})
@@ -325,8 +376,8 @@ def main():
     checkpoint = torch.load(best_path, map_location=device)
     model.load_state_dict(checkpoint["model_state"])
 
-    test_metrics = evaluate(model, test_loader, criterion, device)
-    predictions_csv, emotion_counts = run_inference(model, test_loader, device, output_dir)
+    test_metrics = evaluate(model, test_loader, criterion, device, args)
+    predictions_csv, emotion_counts = run_inference(model, test_loader, device, output_dir, args)
 
     summary = {
         "best_val_loss": best_val,

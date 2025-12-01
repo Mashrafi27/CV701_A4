@@ -13,7 +13,9 @@ import torch
 
 from data import FacialKeypointsDataset  # noqa: F401 (ensures package import works)
 from src.models.keypoint_resnet import KeypointResNet
+from src.models.keypoint_heatmap import KeypointHeatmapNet
 from src.utils.emotion import EmotionClassifier
+from src.utils.heatmaps import heatmaps_to_keypoints
 from src.utils.keypoints import denormalize_keypoints
 
 IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
@@ -25,6 +27,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint", required=True, help="Path to best_model.pt")
     parser.add_argument("--device", default="mps", help="cuda | mps | cpu")
     parser.add_argument("--backbone", choices=["resnet18", "resnet34"], default="resnet18")
+    parser.add_argument("--heatmap-size", type=int, default=56)
+    parser.add_argument("--head", choices=["regression", "heatmap"], default="regression")
     parser.add_argument("--image-size", type=int, default=224)
     parser.add_argument("--camera-index", type=int, default=0)
     parser.add_argument("--show-emotion", action="store_true")
@@ -84,7 +88,12 @@ def main() -> None:
     if not checkpoint_path.exists():
         raise FileNotFoundError(checkpoint_path)
 
-    model = KeypointResNet(pretrained=False, dropout=0.0, backbone_name=args.backbone)
+    if args.head == "heatmap":
+        model = KeypointHeatmapNet(
+            num_keypoints=68, backbone=args.backbone, pretrained=False, heatmap_size=args.heatmap_size
+        )
+    else:
+        model = KeypointResNet(pretrained=False, dropout=0.0, backbone_name=args.backbone)
     state = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(state["model_state"], strict=False)
     model.to(device)
@@ -135,7 +144,13 @@ def main() -> None:
 
             start = time.perf_counter()
             with torch.no_grad():
-                preds = model(pre_tensor).view(1, -1, 2)
+                outputs = model(pre_tensor)
+                if args.head == "heatmap":
+                    preds = heatmaps_to_keypoints(
+                        outputs, norm_factors.to(device), args.image_size
+                    )
+                else:
+                    preds = outputs.view(1, -1, 2)
             torch.cuda.synchronize() if device.type == "cuda" else None
             inference_time = time.perf_counter() - start
             frame_times.append(inference_time)

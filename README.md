@@ -51,6 +51,16 @@ python -m src.train_task1 \
   --use-wandb --wandb-project cv701_a4 --wandb-run-name hpc_cuda
 ```
 
+### Heatmap Head (optional)
+```bash
+python -m src.train_task1 \
+  --head heatmap \
+  --pretrained \
+  --device cuda \
+  --backbone resnet34 \
+  --output-dir artifacts/task1_heatmap
+```
+
 The script automatically writes `metrics.json` (loss, MAE, RMSE, NME curves) and `test_predictions.csv` (denormalized keypoints + emotion label) into the chosen output directory. The best validation checkpoint is stored as `best_model.pt`, but `.gitignore` excludes it from version control.
 
 ## Results Snapshot (HPC run)
@@ -85,6 +95,7 @@ python -m src.deploy_live \
   --checkpoint artifacts/task1_hpc/best_model.pt \
   --device mps \
   --backbone resnet34 \
+  --head regression \
   --show-emotion \
   --record-path demo.mp4 \
   --max-seconds 30 \
@@ -94,4 +105,4 @@ python -m src.deploy_live \
   --log-summary --log-path demo_summary.json
 ```
 
-Press `q` to exit the OpenCV window. `--smooth-momentum` applies exponential smoothing to stabilize keypoints, `--emotion-hold` keeps the dominant emotion over the last N frames, `--use-face-detector` crops around the detected face for better stability, and `--record-path` saves annotated frames for the report/demo video. `--log-summary/--log-path` record FPS plus emotion counts for the deployment report. For a GUI-friendly workflow, open `notebooks/task2_live_demo.ipynb`, update the checkpoint path, and use the provided buttons to start/stop the preview or toggle recording.
+Press `q` to exit the OpenCV window. `--smooth-momentum` applies exponential smoothing to stabilize keypoints, `--emotion-hold` keeps the dominant emotion over the last N frames, `--use-face-detector` crops around the detected face for better stability, and `--record-path` saves annotated frames for the report/demo video. `--log-summary/--log-path` record FPS plus emotion counts for the deployment report. For heatmap checkpoints, add `--head heatmap --heatmap-size 56`. For a GUI-friendly workflow, open `notebooks/task2_live_demo.ipynb`, update the checkpoint path, and use the provided buttons to start/stop the preview or toggle recording.
