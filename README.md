@@ -61,6 +61,31 @@ The script automatically writes `metrics.json` (loss, MAE, RMSE, NME curves) and
 
 See `artifacts/task1_hpc/metrics.json` for the full history.
 
+### Emotion Statistics Helper
+
+After generating `test_predictions.csv`, run the helper script to inspect class balance and keypoint-derived features:
+
+```bash
+python scripts/compute_emotion_stats.py \
+  --predictions artifacts/task1_hpc/test_predictions.csv \
+  --test-csv data/test_frames_keypoints.csv \
+  --test-root data/test
+```
+
 ## Next Steps
 
 Task 2 (real-time deployment/optimization) still needs to be implemented; Task 1 is ready for reporting with reproducible code, metrics, and prediction dumps.
+
+## Task 2: Real-Time Deployment
+
+Use the live deployment script to stream webcam frames, overlay keypoints, and estimate FPS (defaults to camera index 0 and 224×224 input):
+
+```bash
+python -m src.deploy_live \
+  --checkpoint artifacts/task1_hpc/best_model.pt \
+  --device mps \
+  --backbone resnet34 \
+  --show-emotion
+```
+
+Press `q` to exit the OpenCV window. If you lack a webcam, you can simulate a feed by replacing `cv2.VideoCapture` with a video file or virtual camera.
