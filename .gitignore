@@ -1,9 +1,8 @@
 __pycache__/
 *.py[cod]
 .DS_Store
+**/*.pt
 wandb/
-
-artifacts/**/*.pt
 demo.mp4
 notebooks/*.mp4
 notebooks/.ipynb_checkpoints/
