@@ -75,9 +75,9 @@ class EmotionClassifier:
         if features["brow_eye_dist"] > self.negative_brow:
             score -= 1
 
-        if score >= -1:
-            return "positive"
-        return "negative"
+        if score <= -1:
+            return "negative"
+        return "positive"
 
     def predict_batch(self, keypoints_batch: Iterable[Sequence[Sequence[float]]]) -> List[str]:
         return [self.predict(points) for points in keypoints_batch]
