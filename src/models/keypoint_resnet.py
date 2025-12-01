@@ -10,11 +10,17 @@ import torchvision.models as models
 
 
 class KeypointResNet(nn.Module):
-    """A lightweight ResNet18 backbone with a regression head."""
+    """ResNet-based keypoint regressor (supports ResNet18/34)."""
 
-    def __init__(self, num_keypoints: int = 68, pretrained: bool = True, dropout: float = 0.3):
+    def __init__(
+        self,
+        num_keypoints: int = 68,
+        pretrained: bool = True,
+        dropout: float = 0.3,
+        backbone_name: str = "resnet18",
+    ):
         super().__init__()
-        backbone = self._build_backbone(pretrained)
+        backbone = self._build_backbone(backbone_name, pretrained)
         self.feature_extractor = nn.Sequential(*list(backbone.children())[:-1])
         self.regressor = nn.Sequential(
             nn.Flatten(),
@@ -34,16 +40,25 @@ class KeypointResNet(nn.Module):
             param.requires_grad = not freeze
 
     @staticmethod
-    def _build_backbone(pretrained: bool):
-        """Construct a ResNet18 backbone compatible with old/new torchvision."""
+    def _build_backbone(name: str, pretrained: bool):
+        name = name.lower()
+        valid = {"resnet18": models.resnet18, "resnet34": models.resnet34}
+        if name not in valid:
+            raise ValueError(f"Unsupported backbone '{name}'. Choose from {sorted(valid)}")
+
+        builder = valid[name]
+        weight_enum = None
 
         if hasattr(models, "ResNet18_Weights"):
-            weights = models.ResNet18_Weights.IMAGENET1K_V1 if pretrained else None
-            return models.resnet18(weights=weights)
+            enum_map = {
+                "resnet18": models.ResNet18_Weights.IMAGENET1K_V1,
+                "resnet34": models.ResNet34_Weights.IMAGENET1K_V1,
+            }
+            weight_enum = enum_map.get(name) if pretrained else None
+            return builder(weights=weight_enum)
 
         warnings.warn(
-            "Falling back to legacy torchvision API for resnet18. "
-            "Consider upgrading torchvision to >=0.13 for weights enums.",
+            "Using legacy torchvision API for ResNet weights; consider upgrading torchvision.",
             stacklevel=2,
         )
-        return models.resnet18(pretrained=pretrained)
+        return builder(pretrained=pretrained)
