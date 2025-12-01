@@ -89,7 +89,9 @@ python -m src.deploy_live \
   --record-path demo.mp4 \
   --max-seconds 30 \
   --smooth-momentum 0.5 \
-  --emotion-hold 15
+  --emotion-hold 15 \
+  --use-face-detector \
+  --log-summary --log-path demo_summary.json
 ```
 
-Press `q` to exit the OpenCV window. `--smooth-momentum` applies exponential smoothing to stabilize keypoints, `--emotion-hold` keeps the dominant emotion over the last N frames, and `--record-path` saves annotated frames for the report/demo video. For a GUI-friendly workflow, open `notebooks/task2_live_demo.ipynb`, update the checkpoint path, and use the provided buttons to start/stop the preview or toggle recording.
+Press `q` to exit the OpenCV window. `--smooth-momentum` applies exponential smoothing to stabilize keypoints, `--emotion-hold` keeps the dominant emotion over the last N frames, `--use-face-detector` crops around the detected face for better stability, and `--record-path` saves annotated frames for the report/demo video. `--log-summary/--log-path` record FPS plus emotion counts for the deployment report. For a GUI-friendly workflow, open `notebooks/task2_live_demo.ipynb`, update the checkpoint path, and use the provided buttons to start/stop the preview or toggle recording.

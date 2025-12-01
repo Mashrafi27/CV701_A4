@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import time
 from pathlib import Path
 
@@ -34,6 +35,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--verbose-emotion", action="store_true", help="Print emotion features for debugging")
     parser.add_argument("--smooth-momentum", type=float, default=0.4, help="EMA smoothing factor [0,1)")
     parser.add_argument("--emotion-hold", type=int, default=10, help="Frames to hold last emotion label")
+    parser.add_argument("--use-face-detector", action="store_true", help="Crop detected face before inference")
+    parser.add_argument("--log-summary", action="store_true", help="Print session FPS/emotion counts when exiting")
+    parser.add_argument("--log-path", default=None, help="Optional JSON file to store the session summary")
     return parser.parse_args()
 
 
@@ -53,6 +57,23 @@ def preprocess_frame(frame: np.ndarray, image_size: int) -> tuple[torch.Tensor, 
     tensor = torch.as_tensor(resized, dtype=torch.float32).permute(2, 0, 1) / 255.0
     tensor = (tensor - IMAGENET_MEAN) / IMAGENET_STD
     return tensor, resized
+
+
+def detect_face_region(frame: np.ndarray, cascade: cv2.CascadeClassifier | None):
+    if cascade is None:
+        return None
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80))
+    if len(faces) == 0:
+        return None
+    x, y, w, h = max(faces, key=lambda rect: rect[2] * rect[3])
+    cx, cy = x + w // 2, y + h // 2
+    side = int(max(w, h) * 1.4)
+    x1 = max(0, cx - side // 2)
+    y1 = max(0, cy - side // 2)
+    x2 = min(frame.shape[1], x1 + side)
+    y2 = min(frame.shape[0], y1 + side)
+    return x1, y1, x2, y2
 
 
 def main() -> None:
@@ -88,6 +109,12 @@ def main() -> None:
         )
 
     start_time = time.time()
+    total_frames = 0
+    emotion_counts: dict[str, int] = {}
+    face_detector = None
+    if args.use_face_detector:
+        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        face_detector = cv2.CascadeClassifier(cascade_path)
 
     try:
         while True:
@@ -96,7 +123,14 @@ def main() -> None:
                 print("[WARN] Failed to read frame from camera")
                 break
 
-            pre_tensor, display_rgb = preprocess_frame(frame, args.image_size)
+            crop_region = frame
+            if face_detector is not None:
+                rect = detect_face_region(frame, face_detector)
+                if rect:
+                    x1, y1, x2, y2 = rect
+                    crop_region = frame[y1:y2, x1:x2]
+
+            pre_tensor, display_rgb = preprocess_frame(crop_region, args.image_size)
             pre_tensor = pre_tensor.unsqueeze(0).to(device)
 
             start = time.perf_counter()
@@ -141,8 +175,9 @@ def main() -> None:
                     2,
                 )
                 if args.verbose_emotion:
-                    feats = EmotionClassifier._compute_features(preds_px)
+                    feats = EmotionClassifier._compute_features(display_points)
                     print(f"emotion={emotion_label} | " + ", ".join(f"{k}={v:.3f}" for k, v in feats.items()))
+                emotion_counts[emotion_label] = emotion_counts.get(emotion_label, 0) + 1
 
             if frame_times:
                 fps = 1.0 / (sum(frame_times) / len(frame_times))
@@ -167,6 +202,7 @@ def main() -> None:
             if key == ord("q"):
                 break
 
+            total_frames += 1
             if args.max_seconds > 0 and (time.time() - start_time) >= args.max_seconds:
                 break
     finally:
@@ -174,6 +210,20 @@ def main() -> None:
         cv2.destroyAllWindows()
         if writer:
             writer.release()
+        elapsed = max(time.time() - start_time, 1e-6)
+        summary = {
+            "frames": total_frames,
+            "avg_fps": total_frames / elapsed,
+            "duration_sec": elapsed,
+            "emotion_counts": emotion_counts,
+        }
+        if args.log_summary or args.log_path:
+            print(f"[SUMMARY] {summary}")
+        if args.log_path:
+            try:
+                Path(args.log_path).write_text(json.dumps(summary, indent=2))
+            except OSError as exc:
+                print(f"[WARN] Unable to write summary log: {exc}")
 
 
 if __name__ == "__main__":
