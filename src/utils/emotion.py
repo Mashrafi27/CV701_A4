@@ -31,14 +31,14 @@ class EmotionClassifier:
 
     def __init__(
         self,
-        positive_curve: float = 0.010,
-        positive_width: float = 0.56,
-        positive_height: float = 0.20,
-        positive_eye: float = 0.060,
-        negative_curve: float = 0.050,
-        negative_height: float = 0.22,
-        negative_eye: float = 0.090,
-        negative_brow: float = -0.18,
+        positive_curve: float = 0.015,
+        positive_width: float = 0.54,
+        positive_height: float = 0.18,
+        positive_eye: float = 0.065,
+        negative_curve: float = 0.060,
+        negative_height: float = 0.24,
+        negative_eye: float = 0.095,
+        negative_brow: float = -0.16,
     ):
         self.positive_curve = positive_curve
         self.positive_width = positive_width
