@@ -87,7 +87,9 @@ python -m src.deploy_live \
   --backbone resnet34 \
   --show-emotion \
   --record-path demo.mp4 \
-  --max-seconds 30
+  --max-seconds 30 \
+  --smooth-momentum 0.5 \
+  --emotion-hold 15
 ```
 
-Press `q` to exit the OpenCV window. If you supply `--record-path`, the annotated frames are saved to disk for inclusion in the report/demo video. You can also run the same command inside a Jupyter notebook cell with a leading `!` to capture output alongside the video file.
+Press `q` to exit the OpenCV window. `--smooth-momentum` applies exponential smoothing to stabilize keypoints, `--emotion-hold` keeps the dominant emotion over the last N frames, and `--record-path` saves annotated frames for the report/demo video. You can run the same command in a Jupyter notebook cell (prefix with `!`) to capture output alongside the saved video.

@@ -32,6 +32,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--record-fps", type=int, default=20)
     parser.add_argument("--max-seconds", type=int, default=0, help="Automatically stop after N seconds (0=manual)")
     parser.add_argument("--verbose-emotion", action="store_true", help="Print emotion features for debugging")
+    parser.add_argument("--smooth-momentum", type=float, default=0.4, help="EMA smoothing factor [0,1)")
+    parser.add_argument("--emotion-hold", type=int, default=10, help="Frames to hold last emotion label")
     return parser.parse_args()
 
 
@@ -75,6 +77,8 @@ def main() -> None:
 
     norm_factors = torch.tensor([[args.image_size, args.image_size]], dtype=torch.float32, device=device)
     frame_times: list[float] = []
+    smoothed_keypoints = None
+    emotion_history: list[str] = []
 
     writer = None
     if args.record_path:
@@ -105,13 +109,24 @@ def main() -> None:
                 frame_times.pop(0)
 
             preds_px = denormalize_keypoints(preds, norm_factors).cpu().numpy()[0]
+            if smoothed_keypoints is None:
+                smoothed_keypoints = preds_px.copy()
+            else:
+                alpha = max(0.0, min(0.99, args.smooth_momentum))
+                smoothed_keypoints = alpha * smoothed_keypoints + (1 - alpha) * preds_px
+            display_points = smoothed_keypoints
             overlay = display_rgb.copy()
-            for (x, y) in preds_px:
+            for (x, y) in display_points:
                 cv2.circle(overlay, (int(x), int(y)), 2, (0, 255, 0), -1)
 
             emotion_label = None
             if args.show_emotion:
-                emotion_label = emotion_classifier.predict(preds_px)
+                emotion_label = emotion_classifier.predict(display_points)
+                emotion_history.append(emotion_label)
+                if len(emotion_history) > max(1, args.emotion_hold):
+                    emotion_history.pop(0)
+                dominant = max(set(emotion_history), key=emotion_history.count)
+                emotion_label = dominant
                 cv2.putText(
                     overlay,
                     emotion_label,
