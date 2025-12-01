@@ -31,16 +31,18 @@ class EmotionClassifier:
 
     def __init__(
         self,
-        positive_curve: float = 0.002,
-        positive_width: float = 0.54,
-        positive_eye: float = 0.055,
-        negative_curve: float = 0.030,
-        negative_height: float = 0.30,
-        negative_eye: float = 0.085,
-        negative_brow: float = -0.20,
+        positive_curve: float = 0.010,
+        positive_width: float = 0.56,
+        positive_height: float = 0.24,
+        positive_eye: float = 0.060,
+        negative_curve: float = 0.050,
+        negative_height: float = 0.18,
+        negative_eye: float = 0.090,
+        negative_brow: float = -0.18,
     ):
         self.positive_curve = positive_curve
         self.positive_width = positive_width
+        self.positive_height = positive_height
         self.positive_eye = positive_eye
         self.negative_curve = negative_curve
         self.negative_height = negative_height
@@ -54,8 +56,12 @@ class EmotionClassifier:
         score = 0
 
         # Positive cues
-        if features["smile_curve"] < -self.positive_curve and features["mouth_width"] > self.positive_width:
-            score += 2
+        if features["smile_curve"] < self.positive_curve:
+            score += 1
+        if features["mouth_width"] > self.positive_width:
+            score += 1
+        if features["mouth_height"] > self.positive_height:
+            score += 1
         if features["eye_aspect"] < self.positive_eye:
             score += 1
 
@@ -69,7 +75,7 @@ class EmotionClassifier:
         if features["brow_eye_dist"] > self.negative_brow:
             score -= 1
 
-        if score >= 1:
+        if score >= 2:
             return "positive"
         if score <= -1:
             return "negative"

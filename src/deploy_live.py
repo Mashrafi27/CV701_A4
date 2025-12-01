@@ -28,6 +28,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--camera-index", type=int, default=0)
     parser.add_argument("--show-emotion", action="store_true")
     parser.add_argument("--fps-window", type=int, default=30)
+    parser.add_argument("--record-path", default=None, help="Optional path to save annotated video")
+    parser.add_argument("--record-fps", type=int, default=20)
+    parser.add_argument("--max-seconds", type=int, default=0, help="Automatically stop after N seconds (0=manual)")
+    parser.add_argument("--verbose-emotion", action="store_true", help="Print emotion features for debugging")
     return parser.parse_args()
 
 
@@ -72,6 +76,15 @@ def main() -> None:
     norm_factors = torch.tensor([[args.image_size, args.image_size]], dtype=torch.float32, device=device)
     frame_times: list[float] = []
 
+    writer = None
+    if args.record_path:
+        fourcc = cv2.VideoWriter_fourcc(*"MJPG")
+        writer = cv2.VideoWriter(
+            str(args.record_path), fourcc, args.record_fps, (args.image_size, args.image_size)
+        )
+
+    start_time = time.time()
+
     try:
         while True:
             ret, frame = cap.read()
@@ -96,29 +109,56 @@ def main() -> None:
             for (x, y) in preds_px:
                 cv2.circle(overlay, (int(x), int(y)), 2, (0, 255, 0), -1)
 
+            emotion_label = None
             if args.show_emotion:
-                label = emotion_classifier.predict(preds_px)
+                emotion_label = emotion_classifier.predict(preds_px)
                 cv2.putText(
                     overlay,
-                    label,
+                    emotion_label,
                     (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.8,
-                    (0, 255, 0) if label == "positive" else (0, 0, 255) if label == "negative" else (0, 255, 255),
+                    (0, 255, 0)
+                    if emotion_label == "positive"
+                    else (0, 0, 255)
+                    if emotion_label == "negative"
+                    else (0, 255, 255),
                     2,
                 )
+                if args.verbose_emotion:
+                    feats = EmotionClassifier._compute_features(preds_px)
+                    print(f"emotion={emotion_label} | " + ", ".join(f"{k}={v:.3f}" for k, v in feats.items()))
 
             if frame_times:
                 fps = 1.0 / (sum(frame_times) / len(frame_times))
                 cv2.putText(overlay, f"FPS: {fps:.1f}", (10, args.image_size - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-            cv2.imshow("Facial Keypoints", cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))
+            cv2.putText(
+                overlay,
+                "Press q to quit",
+                (args.image_size - 180, args.image_size - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (200, 200, 200),
+                1,
+            )
+
+            bgr_overlay = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
+            if writer:
+                writer.write(bgr_overlay)
+
+            cv2.imshow("Facial Keypoints", bgr_overlay)
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):
+                break
+
+            if args.max_seconds > 0 and (time.time() - start_time) >= args.max_seconds:
                 break
     finally:
         cap.release()
         cv2.destroyAllWindows()
+        if writer:
+            writer.release()
 
 
 if __name__ == "__main__":

@@ -85,7 +85,9 @@ python -m src.deploy_live \
   --checkpoint artifacts/task1_hpc/best_model.pt \
   --device mps \
   --backbone resnet34 \
-  --show-emotion
+  --show-emotion \
+  --record-path demo.mp4 \
+  --max-seconds 30
 ```
 
-Press `q` to exit the OpenCV window. If you lack a webcam, you can simulate a feed by replacing `cv2.VideoCapture` with a video file or virtual camera.
+Press `q` to exit the OpenCV window. If you supply `--record-path`, the annotated frames are saved to disk for inclusion in the report/demo video. You can also run the same command inside a Jupyter notebook cell with a leading `!` to capture output alongside the video file.
