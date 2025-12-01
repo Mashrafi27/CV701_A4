@@ -13,3 +13,4 @@ wandb>=0.16.0
 
 # Deployment / video
 opencv-python>=4.8.0
+ipywidgets>=8.0.0

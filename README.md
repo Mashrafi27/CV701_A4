@@ -92,4 +92,4 @@ python -m src.deploy_live \
   --emotion-hold 15
 ```
 
-Press `q` to exit the OpenCV window. `--smooth-momentum` applies exponential smoothing to stabilize keypoints, `--emotion-hold` keeps the dominant emotion over the last N frames, and `--record-path` saves annotated frames for the report/demo video. You can run the same command in a Jupyter notebook cell (prefix with `!`) to capture output alongside the saved video.
+Press `q` to exit the OpenCV window. `--smooth-momentum` applies exponential smoothing to stabilize keypoints, `--emotion-hold` keeps the dominant emotion over the last N frames, and `--record-path` saves annotated frames for the report/demo video. For a GUI-friendly workflow, open `notebooks/task2_live_demo.ipynb`, update the checkpoint path, and use the provided buttons to start/stop the preview or toggle recording.
