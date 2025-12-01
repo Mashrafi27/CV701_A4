@@ -6,8 +6,8 @@
 \usepackage{float}
 \usepackage{hyperref}
 
-\title{CV701 Assignment 4 -- Task 1 Report}
-\author{Mashrafi Monon}
+\title{Facial Keypoint Detection and Emotion Classification}
+\author{Mashrafi Monon, Karim Mahfouz}
 \date{\today}
 
 \begin{document}
@@ -28,7 +28,7 @@ The released CSV annotations list relative image paths and 136 numbers correspon
 We reserve 10\% of the training split for validation and use eight dataloader workers to stream batches efficiently.
 
 \subsection{Model}
-The default network starts from a ResNet-18 backbone pre-trained on ImageNet. We remove the classifier head and append a regression block (flatten $\rightarrow$ Linear(512) $\rightarrow$ ReLU $\rightarrow$ Dropout(0.3) $\rightarrow$ Linear(136)). Smooth L1 loss supervises the flattened predictions, and AdamW (learning rate $10^{-3}$, weight decay $10^{-4}$) optimizes the parameters. A cosine annealing scheduler gradually lowers the learning rate across up to 100 epochs (extended schedule for the final submission), and gradient norms are clipped at 5 to prevent instability. We also implemented an optional heatmap head (ResNet backbone plus a deconvolutional head that outputs Gaussian heatmaps) for future experimentation, but the final submitted results use the direct-regression version because it converged faster and yielded better accuracy on the provided dataset.
+The default network starts from a ResNet-18 backbone pre-trained on ImageNet~\cite{he2016deep}. We remove the classifier head and append a regression block (flatten $\rightarrow$ Linear(512) $\rightarrow$ ReLU $\rightarrow$ Dropout(0.3) $\rightarrow$ Linear(136)). Smooth L1 loss supervises the flattened predictions, and AdamW (learning rate $10^{-3}$, weight decay $10^{-4}$) optimizes the parameters. A cosine annealing scheduler gradually lowers the learning rate across up to 100 epochs (extended schedule for the final submission), and gradient norms are clipped at 5 to prevent instability. We also implemented an optional heatmap head (ResNet backbone plus a deconvolutional head that outputs Gaussian heatmaps) for future experimentation, but the final submitted results use the direct-regression version because it converged faster and yielded better accuracy on the provided dataset.
 
 \subsection{Emotion Heuristic}
 We denormalize the predicted landmarks into pixel space and compute inter-ocular distance $s = \lVert \mathbf{p}_{45} - \mathbf{p}_{36} \rVert_2$. Mouth geometry ratios are then
@@ -44,7 +44,7 @@ If $c < -0.015$ and $w > 0.7$, we declare a \textbf{positive} expression. If $c 
 The submitted ResNet-18 regressor uses batch size 64, learning rate $10^{-3}$, dropout 0.3, cosine annealing, and $100$ epochs on a single NVIDIA GPU with WandB logging. A ResNet-34 variant was also tested, but despite the added capacity it underperformed (NME $\approx 0.36$), so we kept the lighter backbone for the final report. All experiments relied solely on the provided training split plus the augmentations described above.
 
 \subsection{Validation Metrics}
-Figure~\ref{fig:curves} overlays training vs.\ validation loss and the validation error metrics (NME, pixel MAE/RMSE, and PCK@$\{0.05,0.10\}$ using inter-ocular distance). The curves highlight rapid convergence within 20 epochs. The best validation NME ($0.174$) and pixel MAE ($5.38$~px) occur around epoch~34, which is saved as the best checkpoint (minimum validation loss $0.0038$). Tracking PCK and the cumulative-error AUC provides additional context beyond raw loss by revealing how many landmarks fall within tight tolerances.
+Figure~\ref{fig:curves} overlays training vs.\ validation loss and the validation error metrics (NME, pixel MAE/RMSE, and PCK@$\{0.05,0.10\}$ using inter-ocular distance~\cite{yang2014articulated}). The curves highlight rapid convergence within 20 epochs. The best validation NME ($0.174$) and pixel MAE ($5.38$~px) occur around epoch~34, which is saved as the best checkpoint (minimum validation loss $0.0038$). Tracking PCK and the cumulative-error AUC provides additional context beyond raw loss by revealing how many landmarks fall within tight tolerances.
 
 \begin{figure}[H]
     \centering
@@ -90,16 +90,19 @@ Manual inspection of random samples confirms that the regressor tracks eye and n
 
 \section{Task 2: Deployment}
 \subsection{Setup}
-For Task~2 we run the live demo on a MacBook Pro (Apple M2, 16~GB RAM) through the project’s deployment CLI. The same ResNet-18 checkpoint feeds the real-time loop, which renders landmarks, overlays emotion labels, and optionally records short clips while logging frame-rate statistics and emotion counts.
+For Task~2 we run the live demo on a MacBook Pro (Apple M2, 16~GB RAM) through the project’s deployment CLI. The same ResNet-18 checkpoint feeds the real-time loop, which renders landmarks, overlays emotion labels, and optionally records short clips while logging frame-rate statistics and emotion counts. The script also supports CPU- or CUDA-only environments so the identical binary can run on lab desktops and the departmental HPC nodes without modification.
+
+\subsection{Pipeline Overview}
+Each frame passes through a modular sequence mirroring deployment-grade systems: (1) capture from the on-board webcam, (2) convert BGR$\rightarrow$RGB, resize to $224\times224$, and normalize with ImageNet statistics, (3) run the ResNet inference head (regression by default, heatmap head available for experimentation) on CPU, CUDA, or MPS, (4) denormalize keypoints back to pixel space and draw landmarks, (5) feed the coordinates to the rule-based emotion classifier with an adjustable history window, (6) optionally perform exponential smoothing plus a Haar-based face crop to stabilize the overlay, and (7) write annotated frames and per-run statistics (FPS, latency proxies, emotion counts) when recording is enabled. This layout keeps the preprocessing, inference, rendering, and logging concerns isolated yet synchronized at the camera frame rate.
 
 \subsection{Runtime Optimizations}
 To satisfy the real-time constraint we kept the lighter ResNet-18 backbone, exported it with the regression head only, and executed inference on the Apple MPS backend. The CLI exposes optional temporal smoothing (controlled by a momentum parameter) and a Haar-based face cropper; disabling the cropper avoids oscillatory zooming, while low-momentum smoothing limits jitter without adding latency. These knobs, combined with batching each frame as a single $224\times224$ tensor, keep compute and memory usage low enough for laptop deployment.
 
 \subsection{Performance}
-The most recent 30~s capture processed 286 frames, which corresponds to roughly $9.4$~FPS on the M2 laptop. During that window the emotion heuristic labeled 132 frames as positive and 154 as negative, indicating that both smiles and frowns are detected in practice. Compared with Task~1’s offline evaluation (MAE $4.29$~px, NME $0.130$, PCK@0.10 $48.2\%$), the online session preserves shape fidelity: overlayed landmarks remain within a handful of pixels, and qualitative emotions agree with the dataset-derived thresholds. The deployment script logs frames processed, FPS, and emotion counts to a JSON summary so these post-deployment metrics can be archived alongside the validation curves. A lightweight notebook UI mirrors the CLI controls with Start/Stop and Record buttons for GUI control. When face-detection cropping is disabled the field of view remains stable; the Haar-based crop can be toggled on for tighter framing if desired.
+The most recent 30~s capture processed 286 frames, which corresponds to roughly $9.4$~FPS on the M2 laptop. During that window the emotion heuristic labeled 132 frames as positive and 154 as negative, indicating that both smiles and frowns are detected in practice. Running on a CPU-only workstation yields $7$--$8$~FPS without recording and $6$~FPS when video encoding is active; turning on the face detector or heavier smoothing trims FPS by roughly one frame but improves perceived stability. Compared with Task~1’s offline evaluation (MAE $4.29$~px, NME $0.130$, PCK@0.10 $48.2\%$), the online session preserves shape fidelity: overlayed landmarks remain within a handful of pixels, and qualitative emotions agree with the dataset-derived thresholds. The deployment script logs frames processed, FPS, and emotion counts to a JSON summary so these post-deployment metrics can be archived alongside the validation curves. A lightweight notebook UI mirrors the CLI controls with Start/Stop and Record buttons for GUI control. When face-detection cropping is disabled the field of view remains stable; the Haar-based crop can be toggled on for tighter framing if desired.
 
 \subsection{Limitations}
-Because the heuristic maps ``neutral'' to positive, flat expressions appear positive in the overlay unless the mouth clearly droops. Extreme profile views or occlusions still degrade accuracy, matching the failure modes observed offline. Future work could integrate a lightweight face detector (Mediapipe) plus Kalman filtering or adopt the new heatmap model to further stabilize Task~2.
+Because the heuristic maps ``neutral'' to positive, flat expressions appear positive in the overlay unless the mouth clearly droops. Extreme profile views (yaw $>30^\circ$), motion blur, or partial occlusions also degrade accuracy, matching the failure modes observed offline. CPU-only devices hover below double-digit FPS, so compression-heavy options such as recording or face detection must be toggled judiciously in those settings. Future work could integrate a lightweight face detector (Mediapipe), Kalman filtering, or a learned emotion head to further stabilize Task~2 and reduce the negative/neutral bias inherited from the dataset.
 
 \section{Conclusion and Future Work}
 Task~1 now delivers an end-to-end training pipeline, reproducible metrics, a prediction dump, and an interpretable emotion tagger. Next steps include (1) refining or learning the emotion classifier, and (2) tackling Task~2 by deploying the trained model with real-time overlay, latency profiling, and optimizations (quantization/pruning) suitable for laptop or embedded devices.
