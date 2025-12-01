@@ -88,7 +88,7 @@ The final ResNet-18 run (100 epochs with augmentation) achieves the metrics show
 \section{Qualitative Analysis}
 Manual inspection of random samples confirms that the regressor tracks eye and nose landmarks tightly on frontal, well-lit faces. Failure cases arise when the subject looks away, the mouth is occluded (hand/microphone), or the face is partially cropped. Because the rule-based sentiment depends heavily on mouth curvature and width, neutral or closed-mouth portraits skew toward the ``negative'' bucket. Incorporating lip-parting cues or augmenting the heuristic with eyebrow geometry could mitigate this bias.
 
-\section{Task 2: Deployment}
+\section{Deployment}
 \subsection{Setup}
 For Task~2 we run the live demo on a MacBook Pro (Apple M2, 16~GB RAM) through the project’s deployment CLI. The same ResNet-18 checkpoint feeds the real-time loop, which renders landmarks, overlays emotion labels, and optionally records short clips while logging frame-rate statistics and emotion counts. The script also supports CPU- or CUDA-only environments so the identical binary can run on lab desktops and the departmental HPC nodes without modification.
 
@@ -104,8 +104,11 @@ The most recent 30~s capture processed 286 frames, which corresponds to roughly 
 \subsection{Limitations}
 Because the heuristic maps ``neutral'' to positive, flat expressions appear positive in the overlay unless the mouth clearly droops. Extreme profile views (yaw $>30^\circ$), motion blur, or partial occlusions also degrade accuracy, matching the failure modes observed offline. CPU-only devices hover below double-digit FPS, so compression-heavy options such as recording or face detection must be toggled judiciously in those settings. Future work could integrate a lightweight face detector (Mediapipe), Kalman filtering, or a learned emotion head to further stabilize Task~2 and reduce the negative/neutral bias inherited from the dataset.
 
+\section{Code Availability}
+All scripts, configuration files, and trained metrics referenced in this report are available at \href{https://github.com/Mashrafi27/CV701_A4}{github.com/Mashrafi27/CV701\_A4}. The repository contains the training pipeline, deployment CLI, emotion heuristics, reports, and logged artifacts.
+
 \section{Conclusion and Future Work}
-Task~1 now delivers an end-to-end training pipeline, reproducible metrics, a prediction dump, and an interpretable emotion tagger. Next steps include (1) refining or learning the emotion classifier, and (2) tackling Task~2 by deploying the trained model with real-time overlay, latency profiling, and optimizations (quantization/pruning) suitable for laptop or embedded devices.
+Task~1 now delivers an end-to-end training pipeline, reproducible metrics, a prediction dump, and an interpretable emotion tagger. Next steps include (1) refining or learning the emotion classifier, and (2) extending the deployed system with quantization/pruning plus additional backbones suitable for laptop or embedded devices.
 
 \bibliographystyle{plain}
 \bibliography{references}
