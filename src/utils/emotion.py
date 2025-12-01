@@ -75,7 +75,7 @@ class EmotionClassifier:
         if features["brow_eye_dist"] > self.negative_brow:
             score -= 1
 
-        if score >= 1:
+        if score >= 2:
             return "positive"
         return "negative"
 
