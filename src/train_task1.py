@@ -48,6 +48,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
+    parser.add_argument(
+        "--optimizer",
+        choices=["adamw", "adam"],
+        default="adamw",
+        help="Choose optimizer (AdamW by default).",
+    )
     parser.add_argument("--val-split", type=float, default=0.1, help="Fraction of training data used for validation")
     parser.add_argument("--image-size", type=int, default=224)
     parser.add_argument("--num-workers", type=int, default=4)
@@ -57,6 +63,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-grad-norm", type=float, default=5.0)
     parser.add_argument("--freeze-backbone", action="store_true", help="Freeze the ResNet feature extractor")
     parser.add_argument("--pretrained", action="store_true", help="Use ImageNet pretraining")
+    parser.add_argument(
+        "--lr-drop-epochs",
+        type=int,
+        nargs="*",
+        default=[],
+        help="Epoch numbers at which to multiply LR by lr-drop-factor (overrides cosine schedule when set).",
+    )
+    parser.add_argument("--lr-drop-factor", type=float, default=0.1)
     parser.add_argument("--use-wandb", action="store_true", help="Enable Weights & Biases logging")
     parser.add_argument("--wandb-project", default="cv701-task1")
     parser.add_argument("--wandb-entity", default=None)
@@ -278,12 +292,27 @@ def main():
         wandb.watch(model, log="all", log_freq=100)
 
     criterion = nn.SmoothL1Loss()
-    optimizer = torch.optim.AdamW(
-        filter(lambda p: p.requires_grad, model.parameters()),
-        lr=args.learning_rate,
-        weight_decay=args.weight_decay,
-    )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
+    trainable_params = filter(lambda p: p.requires_grad, model.parameters())
+    if args.optimizer == "adam":
+        optimizer = torch.optim.Adam(
+            trainable_params,
+            lr=args.learning_rate,
+            weight_decay=args.weight_decay,
+        )
+    else:
+        optimizer = torch.optim.AdamW(
+            trainable_params,
+            lr=args.learning_rate,
+            weight_decay=args.weight_decay,
+        )
+
+    scheduler = None
+    if args.lr_drop_epochs:
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer, milestones=sorted(args.lr_drop_epochs), gamma=args.lr_drop_factor
+        )
+    else:
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
 
     best_val = float("inf")
     history = {"train": [], "val": []}
@@ -292,7 +321,8 @@ def main():
     for epoch in range(1, args.epochs + 1):
         train_loss = train_one_epoch(model, train_loader, criterion, optimizer, device, args.max_grad_norm)
         val_metrics = evaluate(model, val_loader, criterion, device)
-        scheduler.step()
+        if scheduler is not None:
+            scheduler.step()
 
         history["train"].append({"epoch": epoch, "loss": train_loss})
         history["val"].append({"epoch": epoch, **val_metrics})
